@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/meta_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0A0A0A">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/tv_metadata_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Metadata"
+            android:textColor="#FFFFFF"
+            android:paddingBottom="8dp"
+            android:textSize="16sp" />
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:id="@+id/ll_metadata_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+        </ScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/btn_save_metadata"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="48dp"
+                android:text="Save"
+                android:background="#BFBFBF"
+                android:textColor="#000000"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/btn_cancel_metadata"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="48dp"
+                android:text="Cancel"
+                android:layout_marginStart="8dp"
+                android:background="#BFBFBF"
+                android:textColor="#000000"
+                android:textAllCaps="false" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Working overlay: small silver rounded box centered top (initially hidden) -->
+    <TextView
+        android:id="@+id/tv_working"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="#BFBFBF"
+        android:text="Working"
+        android:textColor="#000000"
+        android:padding="8dp"
+        android:visibility="gone"
+        android:layout_marginTop="12dp"
+        android:layout_gravity="top|center_horizontal" />
+</FrameLayout>
