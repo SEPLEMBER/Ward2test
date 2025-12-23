@@ -8,31 +8,36 @@
     android:background="#0A0A0A"
     android:padding="28dp">
 
-    <!-- simple text links (hardcoded English) -->
-    <TextView
-        android:id="@+id/link_metadata"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <!-- Простые серебристые кнопки с чёрным текстом -->
+    <Button
+        android:id="@+id/btn_metadata"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginBottom="12dp"
+        android:background="#BFBFBF"
         android:text="Metadata"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:padding="16dp" />
+        android:textColor="#000000"
+        android:textAllCaps="false"
+        android:padding="12dp" />
 
-    <TextView
-        android:id="@+id/link_order"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <Button
+        android:id="@+id/btn_order"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginBottom="12dp"
+        android:background="#BFBFBF"
         android:text="Order"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:padding="16dp" />
+        android:textColor="#000000"
+        android:textAllCaps="false"
+        android:padding="12dp" />
 
-    <TextView
-        android:id="@+id/link_edit"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <Button
+        android:id="@+id/btn_edit"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="#BFBFBF"
         android:text="Edit Chapter"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:padding="16dp" />
+        android:textColor="#000000"
+        android:textAllCaps="false"
+        android:padding="12dp" />
 </LinearLayout>
