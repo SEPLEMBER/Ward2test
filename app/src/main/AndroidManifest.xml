@@ -17,6 +17,7 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!-- Launcher -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -27,10 +28,29 @@
             </intent-filter>
         </activity>
 
+        <!-- Settings (SAF) -->
         <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:theme="@style/AppTheme.Transparent" />
+
+        <!-- Metadata editor -->
+        <activity
+            android:name=".MetadataActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+
+        <!-- Chapter order -->
+        <activity
+            android:name=".OrderActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+
+        <!-- Chapter editor -->
+        <activity
+            android:name=".EditorActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
 
     </application>
 
