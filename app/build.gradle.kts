@@ -4,21 +4,21 @@ plugins {
 }
 
 android {
-    namespace = "org.syndes.terminal"
+    namespace = "es.zelliot.epubeditor"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "org.syndes.terminal"
+        applicationId = "es.zelliot.epubeditor"
         minSdk = 26
         targetSdk = 34
         versionCode = 2
-        versionName = "0.17.3"
+        versionName = "0.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true // Включен R8 для оптимизации
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
