@@ -1,20 +1,22 @@
 package es.zelliot.epubeditor
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.view.Gravity
-import android.view.View
 import android.widget.*
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.xmlpull.v1.XmlPullParserFactory
+import java.io.ByteArrayInputStream
+import java.io.OutputStream
+import java.lang.StringBuilder
 import java.util.*
+import java.util.regex.Pattern
+import kotlin.collections.ArrayList
 
 class OrderActivity : AppCompatActivity() {
 
@@ -29,6 +31,11 @@ class OrderActivity : AppCompatActivity() {
     private var book: EpubBook? = null
     private var treeDoc: DocumentFile? = null
     private var opfDoc: DocumentFile? = null
+
+    // raw OPF text and extracted metadata/package attrs (to preserve originals)
+    private var rawOpfText: String? = null
+    private var opfMetadataRaw: String? = null
+    private var opfPackageAttrsRaw: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,9 +75,14 @@ class OrderActivity : AppCompatActivity() {
             return@withContext
         }
 
-        // parse opf
-        val stream = contentResolver.openInputStream(opfDoc!!.uri)
-        if (stream == null) {
+        // read raw OPF text
+        val raw = try {
+            contentResolver.openInputStream(opfDoc!!.uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+        } catch (t: Throwable) {
+            null
+        }
+
+        if (raw == null) {
             withContext(Dispatchers.Main) {
                 Toast.makeText(this@OrderActivity, "Can't open OPF file", Toast.LENGTH_LONG).show()
                 tvInfo.text = "Can't open OPF."
@@ -78,8 +90,12 @@ class OrderActivity : AppCompatActivity() {
             return@withContext
         }
 
-        val (manifest, spine) = parseOpf(stream)
-        stream.close()
+        rawOpfText = raw
+        opfMetadataRaw = extractMetadataBlock(raw)
+        opfPackageAttrsRaw = extractPackageAttrs(raw)
+
+        // parse opf using existing parser (works from InputStream)
+        val (manifest, spine) = parseOpf(ByteArrayInputStream(raw.toByteArray(Charsets.UTF_8)))
 
         // map spine -> manifest entries and find matching DocumentFiles for chapters
         val manifestMap = manifest.associateBy { it.id }
@@ -88,15 +104,15 @@ class OrderActivity : AppCompatActivity() {
             val item = manifestMap[s.idref]
             if (item != null) {
                 val fname = item.href.substringAfterLast('/')
-                // try to find file by name in tree
-                val file = findFileByName(root, fname)
+                // try to find file by name in opf directory first, then root
+                val file = findFileByName(opfDoc?.parentFile ?: root, fname) ?: findFileByName(root, fname)
                 val title = if (file != null) loadTitleFromXhtml(file) else fname
                 chapters.add(Chapter(title = title, href = item.href, file = file))
             }
         }
 
         book = EpubBook(opfFile = opfDoc, baseTree = root)
-        book!!.manifest.addAll(manifest)
+        book!!.manifest.addAll(manifest) // keep full manifest unchanged
         book!!.spine.addAll(spine)
         book!!.chapters.addAll(chapters)
 
@@ -114,7 +130,7 @@ class OrderActivity : AppCompatActivity() {
         }
     }
 
-    private fun createChapterRow(index: Int, chapter: Chapter): View {
+    private fun createChapterRow(index: Int, chapter: Chapter): android.view.View {
         val row = LinearLayout(this)
         row.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         row.orientation = LinearLayout.HORIZONTAL
@@ -168,10 +184,9 @@ class OrderActivity : AppCompatActivity() {
         val b = book ?: return
         if (index <= 0) return
         Collections.swap(b.chapters, index, index - 1)
-        // also swap spine ordering to keep in sync (simple approach)
+        // swap spine items to reflect new order
         if (index - 1 >= 0 && index < b.spine.size) {
             Collections.swap(b.spine, index, index - 1)
-            Collections.swap(b.manifest, index, index - 1) // best-effort; manifest order not critical but keep aligned
         }
         refreshChapterList()
     }
@@ -182,7 +197,6 @@ class OrderActivity : AppCompatActivity() {
         Collections.swap(b.chapters, index, index + 1)
         if (index + 1 < b.spine.size) {
             Collections.swap(b.spine, index, index + 1)
-            Collections.swap(b.manifest, index, index + 1)
         }
         refreshChapterList()
     }
@@ -195,7 +209,7 @@ class OrderActivity : AppCompatActivity() {
             Toast.makeText(this, "Chapter file not found for ${chap.href}", Toast.LENGTH_SHORT).show()
             return
         }
-        val intent = Intent(this, EditorActivity::class.java)
+        val intent = android.content.Intent(this, EditorActivity::class.java)
         intent.putExtra(EditorActivity.EXTRA_HREF, chap.href)
         startActivity(intent)
     }
@@ -206,40 +220,78 @@ class OrderActivity : AppCompatActivity() {
             return
         }
         val root = treeDoc ?: return
+        val opfParent = opfDoc?.parentFile ?: root
 
-        // create new file with unique name
-        var idx = 1
-        while (true) {
-            val candidate = "chapter_new_$idx.xhtml"
-            if (findFileByName(root, candidate) == null) {
-                // create file
-                val newFile = root.createFile("application/xhtml+xml", candidate)
-                if (newFile == null) {
-                    Toast.makeText(this, "Failed to create file", Toast.LENGTH_SHORT).show()
-                    return
+        lifecycleScope.launch(Dispatchers.IO) {
+            // determine next available number by scanning existing files in opfParent
+            val existingNums = mutableSetOf<Int>()
+            opfParent.listFiles().forEach { f ->
+                val nm = f.name ?: return@forEach
+                val m = Pattern.compile("^chapter_new_(\\d+)\\.xhtml$", Pattern.CASE_INSENSITIVE).matcher(nm)
+                if (m.find()) {
+                    try { existingNums.add(m.group(1).toInt()) } catch (_: Exception) {}
                 }
-                // write minimal xhtml content
-                lifecycleScope.launch(Dispatchers.IO) {
-                    val content = minimalXhtmlContent("New Chapter")
-                    contentResolver.openOutputStream(newFile.uri)?.use { out ->
-                        out.write(content.toByteArray(Charsets.UTF_8))
-                        out.flush()
-                    }
-                    // update in-memory manifest/spine/chapters
-                    val newId = "item${b.manifest.size + 1}"
-                    val newHref = candidate
-                    val newManifest = ManifestItem(newId, newHref, "application/xhtml+xml")
-                    b.manifest.add(newManifest)
-                    b.spine.add(SpineItem(newId))
-                    b.chapters.add(Chapter(title = "New Chapter", href = newHref, file = newFile))
-                    withContext(Dispatchers.Main) {
-                        refreshChapterList()
-                        Toast.makeText(this@OrderActivity, "Chapter created", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                break
             }
-            idx++
+            var next = 1
+            while (existingNums.contains(next)) next++
+            val candidate = "chapter_new_$next.xhtml"
+
+            // create new file in opfParent (so it's next to existing content files)
+            val newFile = try {
+                opfParent.createFile("application/xhtml+xml", candidate)
+            } catch (t: Throwable) {
+                null
+            }
+
+            if (newFile == null) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@OrderActivity, "Failed to create file", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+
+            // write minimal xhtml content
+            try {
+                val content = minimalXhtmlContent("New Chapter")
+                contentResolver.openOutputStream(newFile.uri)?.use { out ->
+                    out.write(content.toByteArray(Charsets.UTF_8))
+                    out.flush()
+                }
+            } catch (t: Throwable) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@OrderActivity, "Failed to write new file: ${t.message}", Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+
+            // generate unique manifest id that doesn't collide
+            val existingIds = b.manifest.mapNotNull { it.id }.mapNotNull { id ->
+                // try to extract numeric suffix if present like item123
+                val m = Regex(".*?(\\d+)$").find(id)
+                m?.groups?.get(1)?.value?.toIntOrNull()
+            }.filterNotNull()
+            var newIdNum = if (existingIds.isEmpty()) 1 else (existingIds.maxOrNull() ?: 0) + 1
+            var newId = "item$newIdNum"
+            // ensure unique string id
+            while (b.manifest.any { it.id == newId }) {
+                newIdNum++
+                newId = "item$newIdNum"
+            }
+
+            val newHref = candidate
+            val newManifest = ManifestItem(newId, newHref, "application/xhtml+xml")
+            // add to manifest (leave other manifest items intact)
+            b.manifest.add(newManifest)
+            // add to spine at end
+            b.spine.add(SpineItem(newId))
+            // add to chapters list (title from file)
+            val newTitle = loadTitleFromXhtml(newFile) ?: "New Chapter"
+            b.chapters.add(Chapter(title = newTitle, href = newHref, file = newFile))
+
+            withContext(Dispatchers.Main) {
+                refreshChapterList()
+                Toast.makeText(this@OrderActivity, "Chapter created: $candidate", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -269,18 +321,52 @@ class OrderActivity : AppCompatActivity() {
             return
         }
 
-        // regenerate minimal opf and write to opf file
         lifecycleScope.launch(Dispatchers.IO) {
-            // choose a simple title from first chapter
-            val title = if (b.chapters.isNotEmpty()) b.chapters[0].title else "Book"
-            val bytes = generateOpfBytes(packageUniqueId = "bookid", title = title, manifest = b.manifest, spine = b.spine)
-
             try {
-                contentResolver.openOutputStream(opf.uri, "wt")?.use { out ->
-                    out.write(bytes)
+                // create backup of original OPF (if available)
+                rawOpfText?.let { raw ->
+                    createOpfBackup(opf, raw)
+                }
+
+                // build new OPF text keeping original metadata & package attributes if present
+                val packageAttrs = opfPackageAttrsRaw ?: " xmlns=\"http://www.idpf.org/2007/opf\" version=\"2.0\" unique-identifier=\"bookid\""
+                val metadataBlock = opfMetadataRaw ?: buildMinimalMetadata(b)
+
+                val sb = StringBuilder()
+                sb.append("""<?xml version="1.0" encoding="utf-8"?>""").append("\n")
+                sb.append("<package").append(packageAttrs).append(">").append("\n")
+                sb.append(metadataBlock).append("\n")
+                // manifest: include all manifest items (we preserve original non-xhtml items as well)
+                sb.append("<manifest>").append("\n")
+                b.manifest.forEach { it ->
+                    sb.append("  <item id=\"${escapeXml(it.id)}\" href=\"${escapeXml(it.href)}\" media-type=\"${escapeXml(it.mediaType)}\" />").append("\n")
+                }
+                sb.append("</manifest>").append("\n")
+                // spine: reflect current spine order
+                sb.append("<spine>").append("\n")
+                b.spine.forEach { s ->
+                    sb.append("  <itemref idref=\"${escapeXml(s.idref)}\"")
+                    if (!s.linear) sb.append(" linear=\"no\"")
+                    sb.append(" />").append("\n")
+                }
+                sb.append("</spine>").append("\n")
+                sb.append("</package>").append("\n")
+
+                val newOpfBytes = sb.toString().toByteArray(Charsets.UTF_8)
+
+                // write into OPF file (overwrite)
+                contentResolver.openOutputStream(opf.uri)?.use { out ->
+                    out.write(newOpfBytes)
+                    out.flush()
                 } ?: throw Exception("openOutputStream returned null")
+
+                // update local raw and metadata cache
+                rawOpfText = String(newOpfBytes, Charsets.UTF_8)
+                opfMetadataRaw = extractMetadataBlock(rawOpfText!!)
+                opfPackageAttrsRaw = extractPackageAttrs(rawOpfText!!)
+
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@OrderActivity, "OPF updated (saved)", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@OrderActivity, "OPF updated and saved (backup created)", Toast.LENGTH_SHORT).show()
                 }
             } catch (t: Throwable) {
                 withContext(Dispatchers.Main) {
@@ -320,6 +406,91 @@ class OrderActivity : AppCompatActivity() {
             }
         } catch (t: Throwable) {
             file.name ?: "chapter"
+        }
+    }
+
+    // Extract metadata block raw (<metadata>...</metadata>) using regex (DOT_MATCHES_ALL)
+    private fun extractMetadataBlock(opfText: String): String? {
+        val regex = Regex("(?is)<metadata.*?>.*?</metadata>")
+        return regex.find(opfText)?.value
+    }
+
+    // Extract attributes part inside <package ...> (group 1). Example: xmlns=... version=...
+    private fun extractPackageAttrs(opfText: String): String? {
+        val regex = Regex("(?is)<package([^>]*)>")
+        val m = regex.find(opfText)
+        return m?.groups?.get(1)?.value?.trim()
+    }
+
+    // Build a minimal metadata block if original not available
+    private fun buildMinimalMetadata(b: EpubBook): String {
+        val title = if (b.chapters.isNotEmpty()) b.chapters[0].title else "Untitled"
+        return """
+            <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+              <dc:title>$title</dc:title>
+            </metadata>
+        """.trimIndent()
+    }
+
+    // Create a backup file for OPF (opfFileName.bak, opfFileName.bak_1, etc.)
+    private fun createOpfBackup(opf: DocumentFile, originalText: String) {
+        try {
+            val parent = opf.parentFile ?: return
+            val baseName = opf.name ?: "content.opf"
+            var bakName = "$baseName.bak"
+            var idx = 0
+            while (findFileByName(parent, bakName) != null) {
+                idx++
+                bakName = "$baseName.bak_$idx"
+            }
+            val bakFile = parent.createFile("application/octet-stream", bakName) ?: return
+            contentResolver.openOutputStream(bakFile.uri)?.use { out ->
+                out.write(originalText.toByteArray(Charsets.UTF_8))
+                out.flush()
+            }
+        } catch (_: Throwable) {
+            // swallow backup errors silently (but don't crash the save)
+        }
+    }
+
+    private fun escapeXml(s: String): String {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
+    }
+
+    // Convenience wrapper to parse OPF from InputStream (we rely on existing parseOpf function if available,
+    // but provide fallback simple parser here if not)
+    private fun parseOpf(input: ByteArrayInputStream): Pair<List<ManifestItem>, List<SpineItem>> {
+        // If there is a global parseOpf (from EpubModels), use it. Otherwise fallback to local implementation.
+        return try {
+            // try to call top-level parseOpf(InputStream) (defined in EpubModels.kt)
+            parseOpf(input as java.io.InputStream)
+        } catch (t: Throwable) {
+            // fallback: very simple XMLPull parser for items/itemref
+            val manifest = ArrayList<ManifestItem>()
+            val spine = ArrayList<SpineItem>()
+            try {
+                val factory = XmlPullParserFactory.newInstance()
+                val parser = factory.newPullParser()
+                parser.setInput(input, "utf-8")
+                var event = parser.eventType
+                while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                    if (event == org.xmlpull.v1.XmlPullParser.START_TAG) {
+                        val name = parser.name
+                        if (name.equals("item", ignoreCase = true)) {
+                            val id = parser.getAttributeValue(null, "id") ?: ""
+                            val href = parser.getAttributeValue(null, "href") ?: ""
+                            val mediaType = parser.getAttributeValue(null, "media-type") ?: ""
+                            manifest.add(ManifestItem(id, href, mediaType))
+                        } else if (name.equals("itemref", ignoreCase = true)) {
+                            val idref = parser.getAttributeValue(null, "idref") ?: ""
+                            val linear = parser.getAttributeValue(null, "linear")?.let { it != "no" } ?: true
+                            spine.add(SpineItem(idref, linear))
+                        }
+                    }
+                    event = parser.next()
+                }
+            } catch (_: Throwable) { }
+            Pair(manifest, spine)
         }
     }
 }
