@@ -12,11 +12,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.ByteArrayInputStream
-import java.io.OutputStream
 import java.lang.StringBuilder
 import java.util.*
 import java.util.regex.Pattern
 import kotlin.collections.ArrayList
+import kotlin.math.max
 
 class OrderActivity : AppCompatActivity() {
 
@@ -94,8 +94,8 @@ class OrderActivity : AppCompatActivity() {
         opfMetadataRaw = extractMetadataBlock(raw)
         opfPackageAttrsRaw = extractPackageAttrs(raw)
 
-        // parse opf using existing parser (works from InputStream)
-        val (manifest, spine) = parseOpf(ByteArrayInputStream(raw.toByteArray(Charsets.UTF_8)))
+        // parse opf using local safe parser which will call top-level parseOpf when possible
+        val (manifest, spine) = parseOpfFallback(ByteArrayInputStream(raw.toByteArray(Charsets.UTF_8)))
 
         // map spine -> manifest entries and find matching DocumentFiles for chapters
         val manifestMap = manifest.associateBy { it.id }
@@ -105,7 +105,8 @@ class OrderActivity : AppCompatActivity() {
             if (item != null) {
                 val fname = item.href.substringAfterLast('/')
                 // try to find file by name in opf directory first, then root
-                val file = findFileByName(opfDoc?.parentFile ?: root, fname) ?: findFileByName(root, fname)
+                val opfParent = opfDoc?.parentFile
+                val file = findFileByName(opfParent ?: root, fname) ?: findFileByName(root, fname)
                 val title = if (file != null) loadTitleFromXhtml(file) else fname
                 chapters.add(Chapter(title = title, href = item.href, file = file))
             }
@@ -397,8 +398,8 @@ class OrderActivity : AppCompatActivity() {
             val raw = input.bufferedReader(Charsets.UTF_8).readText()
             input.close()
             // try <title>
-            val titleRegex = Regex("<title[^>]*>(.*?)</title>", RegexOption.IGNORE_CASE or RegexOption.DOT_MATCHES_ALL)
-            val h1Regex = Regex("<h1[^>]*>(.*?)</h1>", RegexOption.IGNORE_CASE or RegexOption.DOT_MATCHES_ALL)
+            val titleRegex = Regex("<title[^>]*>(.*?)</title>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+            val h1Regex = Regex("<h1[^>]*>(.*?)</h1>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
             when {
                 titleRegex.containsMatchIn(raw) -> titleRegex.find(raw)?.groups?.get(1)?.value?.trim() ?: file.name ?: "chapter"
                 h1Regex.containsMatchIn(raw) -> h1Regex.find(raw)?.groups?.get(1)?.value?.trim() ?: file.name ?: "chapter"
@@ -457,40 +458,41 @@ class OrderActivity : AppCompatActivity() {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
     }
 
-    // Convenience wrapper to parse OPF from InputStream (we rely on existing parseOpf function if available,
-    // but provide fallback simple parser here if not)
-    private fun parseOpf(input: ByteArrayInputStream): Pair<List<ManifestItem>, List<SpineItem>> {
-        // If there is a global parseOpf (from EpubModels), use it. Otherwise fallback to local implementation.
-        return try {
-            // try to call top-level parseOpf(InputStream) (defined in EpubModels.kt)
-            parseOpf(input as java.io.InputStream)
+    // Local fallback parser for OPF (accepts ByteArrayInputStream). It first tries to call
+    // the top-level parseOpf(InputStream) function; if unavailable or fails, it uses a simple XmlPullParser.
+    private fun parseOpfFallback(input: ByteArrayInputStream): Pair<List<ManifestItem>, List<SpineItem>> {
+        // try to call top-level parseOpf(InputStream) from EpubModels (fully-qualified)
+        try {
+            // call top-level function explicitly to avoid recursive call
+            return es.zelliot.epubeditor.parseOpf(input as java.io.InputStream)
         } catch (t: Throwable) {
-            // fallback: very simple XMLPull parser for items/itemref
-            val manifest = ArrayList<ManifestItem>()
-            val spine = ArrayList<SpineItem>()
-            try {
-                val factory = XmlPullParserFactory.newInstance()
-                val parser = factory.newPullParser()
-                parser.setInput(input, "utf-8")
-                var event = parser.eventType
-                while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
-                    if (event == org.xmlpull.v1.XmlPullParser.START_TAG) {
-                        val name = parser.name
-                        if (name.equals("item", ignoreCase = true)) {
-                            val id = parser.getAttributeValue(null, "id") ?: ""
-                            val href = parser.getAttributeValue(null, "href") ?: ""
-                            val mediaType = parser.getAttributeValue(null, "media-type") ?: ""
-                            manifest.add(ManifestItem(id, href, mediaType))
-                        } else if (name.equals("itemref", ignoreCase = true)) {
-                            val idref = parser.getAttributeValue(null, "idref") ?: ""
-                            val linear = parser.getAttributeValue(null, "linear")?.let { it != "no" } ?: true
-                            spine.add(SpineItem(idref, linear))
-                        }
-                    }
-                    event = parser.next()
-                }
-            } catch (_: Throwable) { }
-            Pair(manifest, spine)
+            // fallback simple parser
         }
+
+        val manifest = ArrayList<ManifestItem>()
+        val spine = ArrayList<SpineItem>()
+        try {
+            val factory = XmlPullParserFactory.newInstance()
+            val parser = factory.newPullParser()
+            parser.setInput(input, "utf-8")
+            var event = parser.eventType
+            while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                if (event == org.xmlpull.v1.XmlPullParser.START_TAG) {
+                    val name = parser.name
+                    if (name.equals("item", ignoreCase = true)) {
+                        val id = parser.getAttributeValue(null, "id") ?: ""
+                        val href = parser.getAttributeValue(null, "href") ?: ""
+                        val mediaType = parser.getAttributeValue(null, "media-type") ?: ""
+                        manifest.add(ManifestItem(id, href, mediaType))
+                    } else if (name.equals("itemref", ignoreCase = true)) {
+                        val idref = parser.getAttributeValue(null, "idref") ?: ""
+                        val linear = parser.getAttributeValue(null, "linear")?.let { it != "no" } ?: true
+                        spine.add(SpineItem(idref, linear))
+                    }
+                }
+                event = parser.next()
+            }
+        } catch (_: Throwable) { }
+        return Pair(manifest, spine)
     }
 }
