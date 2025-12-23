@@ -26,7 +26,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="bold"
-            android:allCaps="false"/>
+            android:textAllCaps="false"/>
 
         <Button
             android:id="@+id/btn_italic"
@@ -34,7 +34,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="italic"
-            android:allCaps="false"/>
+            android:textAllCaps="false"/>
 
         <Button
             android:id="@+id/btn_center"
@@ -42,7 +42,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="center"
-            android:allCaps="false"/>
+            android:textAllCaps="false"/>
     </LinearLayout>
 
     <EditText
@@ -64,5 +64,5 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Save"
-        android:allCaps="false"/>
+        android:textAllCaps="false"/>
 </LinearLayout>
