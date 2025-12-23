@@ -41,7 +41,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Add Chapter"
-            android:allCaps="false"
+            android:textAllCaps="false"
             android:layout_marginEnd="8dp"/>
 
         <Button
@@ -49,7 +49,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Save Order"
-            android:allCaps="false"/>
+            android:textAllCaps="false"/>
 
     </LinearLayout>
 </LinearLayout>
