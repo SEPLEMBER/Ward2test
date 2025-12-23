@@ -1,118 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/settingsRoot"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/settings_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/terminal_bg">
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="#121212">
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/tv_title_settings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Settings"
+        android:textSize="20sp"
+        android:textColor="#FFFFFF"
+        android:paddingBottom="16dp" />
+
+    <Button
+        android:id="@+id/btn_choose_folder"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp">
+        android:text="Choose EPUB folder (SAF)"
+        android:allCaps="false" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Settings"
-            android:textSize="18sp"
-            android:fontFamily="monospace"
-            android:textColor="@color/terminal_text"
-            android:paddingBottom="8dp"/>
+    <TextView
+        android:id="@+id/tv_folder_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="No folder selected"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:textColor="#FFFFFF" />
 
-        <!-- Work folder (SAF) -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Work folder (SAF)"
-            android:fontFamily="monospace"
-            android:textColor="@color/terminal_text"
-            android:paddingTop="6dp"/>
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-            <TextView
-                android:id="@+id/workFolderUri"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:fontFamily="monospace"
-                android:textColor="@color/terminal_text"
-                android:text="(not set)"
-                android:padding="8dp"/>
-            <Button
-                android:id="@+id/chooseFolderBtn"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Choose"
-                android:fontFamily="monospace"/>
-        </LinearLayout>
+    <Button
+        android:id="@+id/btn_clear_folder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Clear Selection"
+        android:allCaps="false" />
 
-        <!-- Theme removed -->
+    <!-- Небольшой поясняющий текст -->
+    <TextView
+        android:id="@+id/tv_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="20dp"
+        android:text="Choose the root folder of the unpacked EPUB (contains META-INF and OPF). We store a persistent SAF permission."
+        android:textColor="#DDDDDD"
+        android:textSize="12sp" />
 
-        <!-- Autoscroll -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingTop="12dp">
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Auto-scroll terminal"
-                android:fontFamily="monospace"
-                android:textColor="@color/terminal_text"/>
-            <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/autoScrollSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
-        </LinearLayout>
-
-        <!-- Aliases -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Aliases (one per line, format: name=command)"
-            android:fontFamily="monospace"
-            android:textColor="@color/terminal_text"
-            android:paddingTop="12dp"/>
-        <EditText
-            android:id="@+id/aliasesField"
-            android:layout_width="match_parent"
-            android:layout_height="120dp"
-            android:fontFamily="monospace"
-            android:textColor="@color/terminal_text"
-            android:gravity="top"
-            android:inputType="textMultiLine"
-            android:background="@android:color/transparent"
-            android:padding="8dp"/>
-
-        <!-- Buttons -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="end"
-            android:paddingTop="16dp">
-
-            <Button
-                android:id="@+id/resetButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Reset"
-                android:fontFamily="monospace"/>
-
-            <Button
-                android:id="@+id/saveButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Save"
-                android:fontFamily="monospace"
-                android:layout_marginStart="8dp"/>
-        </LinearLayout>
-
-    </LinearLayout>
-</ScrollView>
+</LinearLayout>
