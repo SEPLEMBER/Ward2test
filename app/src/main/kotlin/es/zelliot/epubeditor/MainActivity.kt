@@ -4,14 +4,13 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
-import android.widget.TextView
+import android.widget.Button
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
 
-    // Имена активити, которые будут реализованы позже.
-    // Мы пытаемся стартовать их по полному имени пакета; если их нет — показываем Toast.
+    // Имена активити (простые имена — ожидается, что классы находятся в том же пакете)
     private val metadataActivityName = "MetadataActivity"
     private val orderActivityName = "OrderActivity"
     private val editorActivityName = "EditorActivity"
@@ -20,23 +19,16 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val tvMetadata = findViewById<TextView>(R.id.link_metadata)
-        val tvOrder = findViewById<TextView>(R.id.link_order)
-        val tvEdit = findViewById<TextView>(R.id.link_edit)
+        val btnMetadata = findViewById<Button>(R.id.btn_metadata)
+        val btnOrder = findViewById<Button>(R.id.btn_order)
+        val btnEdit = findViewById<Button>(R.id.btn_edit)
 
-        tvMetadata.setOnClickListener {
-            tryLaunchByClassName(metadataActivityName)
-        }
-        tvOrder.setOnClickListener {
-            tryLaunchByClassName(orderActivityName)
-        }
-        tvEdit.setOnClickListener {
-            tryLaunchByClassName(editorActivityName)
-        }
+        btnMetadata.setOnClickListener { tryLaunchByClassName(metadataActivityName) }
+        btnOrder.setOnClickListener { tryLaunchByClassName(orderActivityName) }
+        btnEdit.setOnClickListener { tryLaunchByClassName(editorActivityName) }
     }
 
     private fun tryLaunchByClassName(classSimpleName: String) {
-        // Формируем полный ComponentName: package + "." + classSimpleName
         val fullName = "${packageName}.$classSimpleName"
         val component = ComponentName(packageName, fullName)
         val intent = Intent().setComponent(component)
